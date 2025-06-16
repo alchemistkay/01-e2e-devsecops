@@ -19,20 +19,20 @@ pipeline {
         }
         stage('Git Pulling') {
             steps {
-                git credentialsId: 'github-creds', branch: 'main', url: 'https://github.com/aatikah/mern-end-to-end-devsecops-with-terraform-eks-and-jenkins.git'
+                git credentialsId: 'github-creds', branch: 'main', url: 'https://github.com/alchemistkay/01-e2e-devsecops.git'
 
             }
         }
         stage('Init') {
             steps {
-                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                withAWS(credentials: 'aws-cred', region: 'eu-west-2') {
                 sh 'terraform -chdir=infra-tf/ init'
                 }
             }
         }
         stage('Validate') {
             steps {
-                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                withAWS(credentials: 'aws-cred', region: 'eu-west-2') {
                 sh 'terraform -chdir=infra-tf/ validate'
                 }
             }
