@@ -39,7 +39,7 @@ pipeline {
         }
         stage('Action') {
             steps {
-                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                withAWS(credentials: 'aws-cred', region: 'eu-west-2') {
                     script {    
                         if (params.Terraform_Action == 'plan') {
                             sh "terraform -chdir=infra-tf/ plan -var-file=${params.Environment}.tfvars"
