@@ -36,7 +36,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.31"
 
-  cluster_name    = "end-to-end-devsecops"
+  cluster_name    = "01-e2e-devsecops"
   cluster_version = "1.33"
 
   # Optional
