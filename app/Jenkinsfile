@@ -10,7 +10,7 @@ pipeline {
         NVD_API_KEY = credentials('nvd-api-key')
         AWS_ACCOUNT_ID = credentials('aws-account-id')
         AWS_DEFAULT_REGION = 'eu-west-2'
-        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
         GIT_USER_EMAIL = credentials('git-user-email')
     }
 
@@ -106,9 +106,9 @@ pipeline {
                     def services = ['frontend', 'backend']
 
                     services.each { service ->
-                        def image = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        def localImageName = "mern-task-app-${service}-prod-img"
                         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                            sh "trivy image --format json ${image} > trivy_${service}_image.json"
+                            sh "trivy image --format json ${localImageName} > trivy_${service}_image.json"
                         }
                         archiveArtifacts artifacts: "trivy_${service}_image.json", allowEmptyArchive: true
                     }
