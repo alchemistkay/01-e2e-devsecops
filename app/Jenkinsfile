@@ -69,7 +69,7 @@ pipeline {
             steps {
                 dir('app') {
                     catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                        dependencyCheck additionalArguments: "--scan ./ --nvdApiKey=${NVD_API_KEY} --disableYarnAudit --disableNodeAudit", 
+                        dependencyCheck additionalArguments: "--scan ./ --nvdApiKey=${env.NVD_API_KEY} --disableYarnAudit --disableNodeAudit", 
                                          odcInstallation: 'owasp-DC'
                     }
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
@@ -142,7 +142,7 @@ pipeline {
                 GIT_REPO_NAME = "01-e2e-devsecops"
             }
             steps {
-                dir('k8-manifests') {
+                dir('k8s-manifests') {
                     script {
                         def services = ['frontend', 'backend']
 
