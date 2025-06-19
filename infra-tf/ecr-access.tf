@@ -32,7 +32,7 @@ data "aws_iam_policy_document" "ecr_read_only" {
 }
 
 resource "aws_iam_policy" "ecr_read_only" {
-  name   = "ECRReadOnlyPolicy"
+  name   = "ECRReadOnlyPolicy1"
   policy = data.aws_iam_policy_document.ecr_read_only.json
 }
 
@@ -57,7 +57,7 @@ data "aws_iam_policy_document" "assume_role_irsa" {
 }
 
 resource "aws_iam_role" "ecr_access" {
-  name               = "ECRAccessRole"
+  name               = "ECRAccessRole1"
   assume_role_policy = data.aws_iam_policy_document.assume_role_irsa.json
 }
 
