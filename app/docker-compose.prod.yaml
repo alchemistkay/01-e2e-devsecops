@@ -1,0 +1,25 @@
+version: '3'
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.prod
+    image: mern-task-app-backend-prod-img
+    container_name: mern-task-app-backend-prod
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGO_URI=${MONGO_URI}
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.prod
+    image: mern-task-app-frontend-prod-img
+    container_name: mern-task-app-frontend-prod
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

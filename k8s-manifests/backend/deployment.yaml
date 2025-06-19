@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: task-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: ecr-access-sa
+      containers:
+        - name: backend
+          image: 009160063554.dkr.ecr.eu-west-2.amazonaws.com/backend:1
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: task-app-secret
+                  key: MONGODB_URI
+            - name: NODE_ENV
+              value: production

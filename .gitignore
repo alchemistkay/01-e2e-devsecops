@@ -1,0 +1,67 @@
+# k8s secret.yaml file
+secret.yaml
+# Local .terraform directories
+**/.terraform/*
+!.terraform/*.tfstate.backup
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Exclude override files as they are usually used to override resources for testing
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Sensitive variable files
+#*.tfvars
+*.tfvars.json
+
+# Terraform plan output
+*.plan
+
+# CLI configuration
+.terraformrc
+terraform.rc
+
+# Lock file (optional - useful to track versions)
+# Uncomment the next line if you DON'T want to commit provider lock files
+# .terraform.lock.hcl
+
+node_modules/
+.env
+package-lock.json
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Key Pair
+argocd-repo-key*
+
+iam_policy*
+
