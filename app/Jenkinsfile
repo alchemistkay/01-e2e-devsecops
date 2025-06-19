@@ -9,8 +9,9 @@ pipeline {
         SCANNER_HOME=tool 'sonar-scanner'
         NVD_API_KEY = credentials('nvd-api-key')
         AWS_ACCOUNT_ID = credentials('aws-account-id')
-        AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_DEFAULT_REGION = 'eu-west-2'
         REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
+        GIT_USER_EMAIL = credentials('git-user-email')
     }
 
     stages {
@@ -30,24 +31,17 @@ pipeline {
 
         stage('Gitleaks Scan') {
             steps {
-                script {
-                    sh '''
-                        docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect \
-                            --source /path \
-                            --report-format json \
-                            --report-path /path/gitleaks-report.json || true
-                    '''
-                    
-                    archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true
-                    
-                    sh '''
-                        if [ -f "gitleaks-report.json" ]; then
-                            cat gitleaks-report.json
-                        else
-                            echo "No Gitleaks report generated."
-                        fi
-                    '''
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
+                        sh '''
+                            docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect \
+                                --source /path \
+                                --report-format json \
+                                --report-path /path/gitleaks-report.json || true
+                        '''
+                    }
                 }
+                archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true
             }
         }
 
@@ -74,8 +68,10 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 dir('app') {
-                    dependencyCheck additionalArguments: '--scan ./ --nvdApiKey=$NVD_API_KEY --disableYarnAudit --disableNodeAudit', 
-                                   odcInstallation: 'owasp-DC' 
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        dependencyCheck additionalArguments: "--scan ./ --nvdApiKey=${NVD_API_KEY} --disableYarnAudit --disableNodeAudit", 
+                                         odcInstallation: 'owasp-DC'
+                    }
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
@@ -84,8 +80,10 @@ pipeline {
         stage('File System Scan With Trivy') {
             steps {
                 dir('app') {
-                    sh 'trivy fs --format json --output trivyfs.json .'
-                    archiveArtifacts artifacts: 'trivyfs.json', onlyIfSuccessful: true
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        sh 'trivy fs --format json --output trivyfs.json .'
+                    }
+                    archiveArtifacts artifacts: 'trivyfs.json', allowEmptyArchive: true
                 }
             }
         }
@@ -96,7 +94,23 @@ pipeline {
                     dir('app') {
                         sh 'docker system prune -f'
                         sh 'docker container prune -f'
-                        sh 'docker-compose -f docker-compose.prod.yml build'
+                        sh 'docker-compose -f docker-compose.prod.yaml build'
+                    }
+                }
+            }
+        }
+
+        stage("Container Image Scan With Trivy") {
+            steps {
+                script {
+                    def services = ['frontend', 'backend']
+
+                    services.each { service ->
+                        def image = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                            sh "trivy image --format json ${image} > trivy_${service}_image.json"
+                        }
+                        archiveArtifacts artifacts: "trivy_${service}_image.json", allowEmptyArchive: true
                     }
                 }
             }
@@ -121,24 +135,9 @@ pipeline {
             }
         }
 
-        stage("Container Image Scan With Trivy") {
-            steps {
-                script {
-                    def services = ['frontend', 'backend']
-
-                    services.each { service ->
-                        def image = "${REPOSITORY_URI}${service}:${BUILD_NUMBER}"
-                        sh "trivy image --format json ${image} > trivy_${service}_image.json"
-                        archiveArtifacts artifacts: "trivy_${service}_image.json", onlyIfSuccessful: true
-                    }
-                }
-            }
-        }
-
         stage('Update Deployment Files') {
             environment {
-                GIT_REPO_NAME = "your-repo-name"
-                GIT_USER_EMAIL = credentials('git-user-email')
+                GIT_REPO_NAME = "01-e2e-devsecops"
             }
             steps {
                 dir('k8-manifests') {
@@ -156,22 +155,17 @@ pipeline {
                                 def files = sh(script: "find . -name 'deployment.yaml'", returnStdout: true).trim().split("\n")
 
                                 files.each { file ->
-                                    def imageTag = sh(
-                                        script: "grep -oP '(?<=${service}:)[^\\\"]+' ${file} || true",
-                                        returnStdout: true
-                                    ).trim()
+                                    def imageTag = sh(script: "grep -oP '(?<=${service}:)[^\\\"]+' ${file} || true", returnStdout: true).trim()
 
                                     if (imageTag) {
-                                        sh "sed -i 's|${service}:${imageTag}|${service}:${BUILD_NUMBER}|' ${file}"
+                                        sh "sed -i 's|${service}:${imageTag}|${service}:${env.BUILD_NUMBER}|' ${file}"
+
                                         sh '''
                                             git config user.email "${GIT_USER_EMAIL}"
                                             git config user.name "${GIT_USERNAME}"
-                                            git add ./frontend/deployment.yaml
-                                            git add ./backend/deployment.yaml
-                                            git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || {
-                                                echo "No changes to commit for ${service}"
-                                            }
-                                            git push "@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git">https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                                            git add ${file}
+                                            git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || echo "No changes to commit"
+                                            git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git HEAD:main
                                         '''
                                     }
                                 }
