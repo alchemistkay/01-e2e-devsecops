@@ -32,13 +32,20 @@ resource "aws_iam_role" "ecr_pod_identity" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Service = "pods.eks.amazonaws.com"
-      },
-      Action = "sts:AssumeRole"
-    }]
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "pods.eks.amazonaws.com"
+        },
+        Action = "sts:AssumeRole",
+        Condition = {
+          StringEquals = {
+            "aws:SourceIdentity" = "ecr-access-sa"  # must match service account name
+          }
+        }
+      }
+    ]
   })
 }
 
