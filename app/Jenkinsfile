@@ -118,18 +118,20 @@ pipeline {
 
         stage("Push Images To ECR") {
             steps {
-                script {
-                    def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
-                    sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
+                withAWS(credentials: 'aws-cred', region: 'eu-west-2'){
+                    script {
+                        def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
+                        sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
 
-                    def services = ['frontend', 'backend'] 
+                        def services = ['frontend', 'backend'] 
 
-                    services.each { service ->
-                        def localImageName = "mern-task-app-${service}-prod-img"
-                        def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
-                        
-                        sh "docker tag ${localImageName} ${imageTag}"
-                        sh "docker push ${imageTag}"
+                        services.each { service ->
+                            def localImageName = "mern-task-app-${service}-prod-img"
+                            def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                            
+                            sh "docker tag ${localImageName} ${imageTag}"
+                            sh "docker push ${imageTag}"
+                        }
                     }
                 }
             }
