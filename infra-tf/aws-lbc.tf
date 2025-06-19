@@ -44,16 +44,17 @@ resource "helm_release" "aws_lbc" {
   namespace  = "kube-system"
   version = "1.7.2"
 
-  set = {
+  set {
     name  = "clusterName"
     value = module.eks.cluster_name
   }
 
-  set = {
+  set {
     name  = "serviceAccount.name"
     value = "aws-load-balancer-controller"
   }
-  set = {
+
+  set {
     name  = "vpcId"
     value = module.vpc.vpc_id
   }
