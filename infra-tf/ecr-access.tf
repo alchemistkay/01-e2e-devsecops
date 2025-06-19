@@ -50,6 +50,6 @@ resource "aws_iam_role_policy_attachment" "ecr_policy_attach" {
 resource "aws_eks_pod_identity_association" "ecr_access" {
   cluster_name = module.eks.cluster_name
   namespace    = kubernetes_namespace.task_app.metadata[0].name
-  service_account_name = kubernetes_service_account.ecr_access.metadata[0].name
+  service_account = kubernetes_service_account.ecr_access.metadata[0].name
   role_arn     = aws_iam_role.ecr_pod_identity.arn
 }
