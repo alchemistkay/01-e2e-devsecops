@@ -16,7 +16,7 @@ spec:
       serviceAccountName: ecr-access-sa
       containers:
         - name: backend
-          image: 009160063554.dkr.ecr.eu-west-2.amazonaws.com/backend:1
+          image: 009160063554.dkr.ecr.eu-west-2.amazonaws.com/backend:8
           ports:
             - containerPort: 5000
           env:
