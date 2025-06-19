@@ -20,6 +20,8 @@ module "vpc" {
   create_redshift_subnet_group = false  # Disable if not used
   enable_flow_log = false  # Disable to avoid log retention blocks
 
+  enable_irsa = true
+
   # Force destroy settings for subnets
   public_subnet_tags = {
     "kubernetes.io/role/elb" = 1
