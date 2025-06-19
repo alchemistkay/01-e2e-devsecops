@@ -1,11 +1,3 @@
-data "aws_eks_cluster" "eks" {
-  name = module.eks.cluster_name
-}
-
-data "aws_eks_cluster_auth" "eks" {
-  name = module.eks.cluster_name
-}
-
 provider "kubernetes" {
     host = data.aws_eks_cluster.eks.endpoint
     token = data.aws_eks_cluster_auth.eks.token
