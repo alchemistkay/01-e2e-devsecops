@@ -1,4 +1,4 @@
 variable "region" {
-  description = "This represents the region for resources deployment."
-
+  description = "AWS region"
+  default     = "eu-west-2"
 }

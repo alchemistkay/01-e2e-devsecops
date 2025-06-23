@@ -1,15 +1,13 @@
-# Create the Kubernetes namespace
-resource "kubernetes_namespace" "task_app" {
+resource "kubernetes_namespace" "ns" {
   metadata {
-    name = "task-app"
+    name = var.namespace
   }
 }
 
-# Create the Kubernetes ServiceAccount
 resource "kubernetes_service_account" "ecr_access" {
   metadata {
-    name      = "ecr-access-sa"
-    namespace = kubernetes_namespace.task_app.metadata[0].name
+    name      = var.service_account_name
+    namespace = kubernetes_namespace.ns.metadata[0].name
 
     annotations = {
       "eks.amazonaws.com/role-arn" = aws_iam_role.ecr_access.arn
@@ -17,7 +15,6 @@ resource "kubernetes_service_account" "ecr_access" {
   }
 }
 
-# Create IAM policy for ECR read-only access
 data "aws_iam_policy_document" "ecr_read_only" {
   statement {
     effect = "Allow"
@@ -32,32 +29,30 @@ data "aws_iam_policy_document" "ecr_read_only" {
 }
 
 resource "aws_iam_policy" "ecr_read_only" {
-  name   = "ECRReadOnlyPolicy1"
+  name   = "${var.name_prefix}-ecr-read-only"
   policy = data.aws_iam_policy_document.ecr_read_only.json
 }
 
-# Create IAM role for IRSA
 data "aws_iam_policy_document" "assume_role_irsa" {
   statement {
     effect = "Allow"
-
     principals {
       type        = "Federated"
-      identifiers = [module.eks.oidc_provider_arn]
+      identifiers = [var.oidc_provider_arn]
     }
 
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
     condition {
       test     = "StringEquals"
-      variable = "${module.eks.oidc_provider}:sub"
-      values   = ["system:serviceaccount:task-app:ecr-access-sa"]
+      variable = "${var.oidc_provider}:sub"
+      values   = ["system:serviceaccount:${var.namespace}:${var.service_account_name}"]
     }
   }
 }
 
 resource "aws_iam_role" "ecr_access" {
-  name               = "ECRAccessRole1"
+  name               = "${var.name_prefix}-ecr-access-role"
   assume_role_policy = data.aws_iam_policy_document.assume_role_irsa.json
 }
 

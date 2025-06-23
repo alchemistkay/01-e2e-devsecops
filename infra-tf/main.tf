@@ -1,104 +1,117 @@
-# Creates VPC Network
+# -----------------------------------------------------------------------------
+# VPC
+# -----------------------------------------------------------------------------
 module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "5.19.0"
-
-  name = "01-e2e-devsecops-vpc"
-  cidr = "10.1.0.0/16"
-
-  azs             = ["eu-west-2a", "eu-west-2b"]
-  private_subnets = ["10.1.1.0/24", "10.1.2.0/24"]
-  public_subnets  = ["10.1.101.0/24", "10.1.102.0/24"]
-
-  enable_nat_gateway = true
-  single_nat_gateway = true
-  enable_dns_hostnames   = true
-
-  # Auto-cleanup dependencies before destroy
-  create_database_subnet_group = false  # Disable if not used
-  create_elasticache_subnet_group = false  # Disable if not used
-  create_redshift_subnet_group = false  # Disable if not used
-  enable_flow_log = false  # Disable to avoid log retention blocks
-
-  # Force destroy settings for subnets
-  public_subnet_tags = {
-    "kubernetes.io/role/elb" = 1
+  source  = "./modules/vpc" 
+  name    = "devsecops-vpc"
+  cidr    = "10.0.0.0/16"
+  azs     = ["eu-west-2a", "eu-west-2b", "eu-west-2c"]
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+  tags = {
+    Terraform   = "true"
+    Environment = "dev"
   }
-
-  private_subnet_tags = {
-    "kubernetes.io/role/internal-elb" = 1
-  }
-  
 }
 
-
+# -----------------------------------------------------------------------------
+# EKS Cluster
+# -----------------------------------------------------------------------------
 module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.31"
-
-  cluster_name    = "01-e2e-devsecops"
-  cluster_version = "1.33"
-
-  enable_irsa = true
-
-  # Optional
-  cluster_endpoint_public_access = true
-
-  # Adds the current caller identity as an administrator
-  enable_cluster_creator_admin_permissions = true
-
+  source     = "./modules/eks"
+  name       = "devsecops-cluster"
+  region     = var.region
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
-
-  # Creates worker nodes
-  eks_managed_node_groups = {
-    default = {
-      min_size = 1
-      max_size = 4
-      desired_size = 2
-      instance_types = ["t3.medium"]
-    }
-  }
-  depends_on = [module.vpc]
 }
 
-resource "aws_ecr_repository" "frontend" {
-  name = "frontend" # Replace with your desired repository name
-
-  image_tag_mutability = "IMMUTABLE" # Optional: Controls the tag mutability, choose between "MUTABLE" or "IMMUTABLE"
-  force_delete = true
-  
-  encryption_configuration {
-    encryption_type = "AES256" # Optional: Can be "AES256" or "KMS" for more advanced encryption
-  }
-
-  lifecycle {
-    prevent_destroy = false # Optional: Prevents accidental deletion of the repository
-  }
+# -----------------------------------------------------------------------------
+# Kubernetes & Helm Providers using EKS Auth
+# -----------------------------------------------------------------------------
+data "aws_eks_cluster" "eks" {
+  name = module.eks.cluster_name
 }
 
-resource "aws_ecr_repository" "backend" {
-  name = "backend" # Replace with your desired repository name
+data "aws_eks_cluster_auth" "eks" {
+  name = module.eks.cluster_name
+}
 
-  image_tag_mutability = "IMMUTABLE" # Optional: Controls the tag mutability, choose between "MUTABLE" or "IMMUTABLE"
-  force_delete = true
-  encryption_configuration {
-    encryption_type = "AES256" # Optional: Can be "AES256" or "KMS" for more advanced encryption
-  }
+provider "kubernetes" {
+  alias                  = "eks"
+  host                   = data.aws_eks_cluster.eks.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.eks.token
+}
 
-  lifecycle {
-    prevent_destroy = false # Optional: Prevents accidental deletion of the repository
+provider "helm" {
+  alias = "eks"
+  kubernetes {
+    host                   = data.aws_eks_cluster.eks.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.eks.token
   }
 }
 
-output "cluster_name" {
-  value = module.eks.cluster_name
+# -----------------------------------------------------------------------------
+# ECR Access Module
+# -----------------------------------------------------------------------------
+module "ecr" {
+  source                = "./modules/ecr"
+  repository_names      = ["frontend", "backend"]
+  namespace             = "task-app"
+  service_account_name  = "ecr-access-sa"
+  oidc_provider         = module.eks.oidc_provider
+  oidc_provider_arn     = module.eks.oidc_provider_arn
+  name_prefix           = "devsecops"
 }
 
-output "frontend_repository_url" {
-  value = aws_ecr_repository.frontend.repository_url
+# -----------------------------------------------------------------------------
+# ArgoCD Module
+# -----------------------------------------------------------------------------
+module "argocd" {
+  source            = "./modules/argocd"
+  namespace         = "argocd"
+  name_prefix       = "devsecops"
+  providers = {
+    helm       = helm.eks
+    kubernetes = kubernetes.eks
+  }
 }
 
-output "backend_repository_url" {
-  value = aws_ecr_repository.backend.repository_url
+# -----------------------------------------------------------------------------
+# AWS Load Balancer Controller Module
+# -----------------------------------------------------------------------------
+module "aws_lbc" {
+  source            = "./modules/aws-lbc"
+  cluster_name      = module.eks.cluster_name
+  oidc_provider     = module.eks.oidc_provider
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  name_prefix       = "devsecops"
+  providers = {
+    helm       = helm.eks
+    kubernetes = kubernetes.eks
+  }
+}
+
+# -----------------------------------------------------------------------------
+# EBS CSI Driver Module
+# -----------------------------------------------------------------------------
+module "ebs_csi_driver" {
+  source            = "./modules/ebs-csi-driver"
+  cluster_name      = module.eks.cluster_name
+  oidc_provider     = module.eks.oidc_provider
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  name_prefix       = "devsecops"
+  providers = {
+    helm       = helm.eks
+    kubernetes = kubernetes.eks
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Pod Identity Addon (Optional)
+# -----------------------------------------------------------------------------
+module "pod_identity" {
+  source       = "./modules/pod-identity"
+  cluster_name = module.eks.cluster_name
 }
